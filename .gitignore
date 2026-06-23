@@ -1,0 +1,28 @@
+# Dataset files — too large for GitHub
+data/raw/
+data/processed/
+
+# Saved model binaries
+models/*.pkl
+models/*.joblib
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+*.egg-info/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Outputs — keep figures, ignore large files
+outputs/results/*.csv
+
+# Implementation plan — ignore plan files
+docs/FYP_Implementation_Plan.md
