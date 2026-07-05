@@ -23,6 +23,11 @@ Thumbs.db
 
 # Outputs — keep figures, ignore large files
 outputs/results/*.csv
+outputs/figures/
 
 # Implementation plan — ignore plan files
 docs/FYP_Implementation_Plan.md
+
+# Virtual environments
+fenv/
+.fenv/
