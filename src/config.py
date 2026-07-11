@@ -191,6 +191,11 @@ TIER_FEATURES = {
     5: TIER5_FEATURES,
 }
 
+# ── Optimisation target ───────────────────────────────────────────────────────
+PRIMARY_METRIC    = 'f1_macro'     # equal weight to both classes
+CLASS_WEIGHT      = 'balanced'     # upweight minority class during training
+DECISION_THRESHOLD = 0.40          # starting point — tuned per model in nb04
+
 # ── Model paths ───────────────────────────────────────────────────────────────
 MODEL_PATHS = {
     'A': MODELS_DIR / 'model_a.pkl',   # T1 specialist
