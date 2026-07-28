@@ -31,3 +31,7 @@ docs/FYP_Implementation_Plan.md
 # Virtual environments
 fenv/
 .fenv/
+
+# md files and py files in notebooks folder
+notebooks/*.md
+notebooks/*.py
