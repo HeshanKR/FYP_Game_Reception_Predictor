@@ -140,6 +140,38 @@ TEST_SIZE    = 0.2
 CV_FOLDS     = 5
 RANDOM_STATE = 42
 
+# ── CatBoost hyperparameters ──────────────────────────────────────────────────
+# FIX 1 (added): Was missing entirely from the original config.
+# Identical across all five specialist models (A–E).
+# Confirmed in NB03 tuning. scale_pos_weight=0.5 upweights the minority
+# class (Not Well Received). allow_writing_files=False prevents CatBoost
+# writing training artefacts to disk during inference.
+CATBOOST_PARAMS = {
+    'depth':               8,
+    'learning_rate':       0.05,
+    'iterations':          1000,
+    'l2_leaf_reg':         3,
+    'scale_pos_weight':    0.5,
+    'random_seed':         RANDOM_STATE,
+    'verbose':             0,
+    'allow_writing_files': False,
+}
+
+# ── Routing thresholds ────────────────────────────────────────────────────────
+# FIX 2 (added): UNCERTAINTY_THRESHOLD was missing entirely from the original config.
+# If Model D's max predicted probability falls below this value, the game is
+# in an ambiguous zone and Model E (SBERT) is invoked as a tiebreaker.
+# Selected by CV search over [0.50, 0.52, 0.55, 0.58, 0.60, 0.63, 0.65, 0.70]
+# in NB04 — best CV Macro F1 at 0.63. Used by router.py and the app.
+UNCERTAINTY_THRESHOLD = 0.63
+
+# NB03 standalone benchmark threshold only — NOT used in the routing pipeline.
+DECISION_THRESHOLD = 0.40
+
+# ── Optimisation target ───────────────────────────────────────────────────────
+PRIMARY_METRIC = 'f1_macro'   # equal weight to both classes
+CLASS_WEIGHT   = 'balanced'   # upweight minority class during training
+
 # ── Feature tier definitions ──────────────────────────────────────────────────
 # Built programmatically from the lists above to avoid duplication.
 # Exact column names match what notebook 02 produces after encoding.
@@ -148,61 +180,79 @@ RANDOM_STATE = 42
 def _col(prefix, name):
     return f'{prefix}_{name.replace(" ", "_").replace("-", "_")}'
 
-# T1 — Core (14 features)
+# T1 — Core (13 features)
+# FIX 3 (comment only): original said "14 features" — correct count is 13.
 # price, required_age, 10 genre one-hots, genre_concentration
 TIER1_FEATURES = (
     ['price', 'required_age']
     + [_col('genre', g) for g in TOP_10_GENRES]
     + ['genre_concentration']
 )
+# len check: 2 + 10 + 1 = 13 ✓
 
-# T2 — Core + Monetisation (16 features)
+# T2 — Core + Monetisation (15 features)
+# FIX 3 (comment only): original said "16 features" — correct count is 15.
 # Adds is_free and price_to_dlc_ratio
 TIER2_FEATURES = TIER1_FEATURES + [
     'is_free',
     'price_to_dlc_ratio',
 ]
+# len check: 13 + 2 = 15 ✓
 
-# T3 — Core + Monetisation + Content (varies — finalised after nb02 encoding)
-# Adds top 20 tag one-hots, key category one-hots, and derived content features
+# T3 — Core + Monetisation + Community labels (47 features)
+# FIX 4: Original TIER3_FEATURES incorrectly included the 6 effort signals.
+# T3 is community labels only: tags and categories. Effort signals belong
+# exclusively in T4. model_c.pkl was trained on exactly these 47 features.
 TIER3_FEATURES = TIER2_FEATURES + (
     [_col('tag', t) for t in TOP_20_TAGS]
     + [_col('cat', c) for c in KEY_CATEGORIES]
-    + [
-        'platform_coverage',          # (mac + linux) / 2  — r=0.107 strongest feature
-        'supported_languages_count',  # r=+0.015 ✓ weak but significant
-        'screenshot_count',           # r=-0.060 ✓ negative (more ≠ better quality)
-        'movie_count',                # r=-0.021 ✓ negative
-        'has_website',                # r=-0.021 ✓ negative
-        'has_achievements',           # r=+0.095 ✓ binary (achievements>0)
-    ]
 )
+# len check: 15 + 20 + 12 = 47 ✓
 
-# T5 — Full tabular + SBERT PCA50 (T3 + 50 text dims)
+# Effort signals — the 6 derived developer-effort features that separate T4 from T3.
+# These test whether observable pre-launch effort (platforms, media count, languages)
+# adds predictive signal on top of community labels alone.
+# T2→T3 was the largest single gain (+0.053 Macro F1). T3→T4 added +0.022.
+EFFORT_SIGNALS = [
+    'platform_coverage',          # (mac + linux) / 2 — r=+0.107, strongest feature
+    'has_achievements',           # binary (achievements > 0) — r=+0.095
+    'has_website',                # binary (website not empty) — r=-0.021
+    'supported_languages_count',  # parsed integer count — r=+0.015
+    'screenshot_count',           # parsed integer count — r=-0.060
+    'movie_count',                # parsed integer count — r=-0.021
+]
+
+# T4 — Full structured (53 features)
+# FIX 4 (continued): T4 is T3 + effort signals. Was missing entirely from
+# original config — TIER_FEATURES[4] just aliased TIER3_FEATURES, which
+# made T3 and T4 identical. model_d.pkl was trained on exactly these 53 features.
+TIER4_FEATURES = TIER3_FEATURES + EFFORT_SIGNALS
+# len check: 47 + 6 = 53 ✓
+
+# T5 — Full structured + SBERT PCA50 (103 features)
+# FIX 5: Original built T5 from TIER3_FEATURES instead of TIER4_FEATURES.
+# T5 must be T4 + text dims. model_e.pkl was trained on exactly these 103 features.
 TIER5_TEXT_DIMS = [f'text_dim_{i}' for i in range(PCA_COMPONENTS)]
-TIER5_FEATURES  = TIER3_FEATURES + TIER5_TEXT_DIMS
+TIER5_FEATURES  = TIER4_FEATURES + TIER5_TEXT_DIMS
+# len check: 53 + 50 = 103 ✓
 
 # Tier → feature list lookup
+# Used by router.py and the Streamlit app to build the correct feature vector.
 TIER_FEATURES = {
-    1: TIER1_FEATURES,
-    2: TIER2_FEATURES,
-    3: TIER3_FEATURES,
-    4: TIER3_FEATURES,   # T4 = T3 (full tabular, same features as T3)
-    5: TIER5_FEATURES,
+    1: TIER1_FEATURES,    # 13 features — Model A
+    2: TIER2_FEATURES,    # 15 features — Model B
+    3: TIER3_FEATURES,    # 47 features — Model C
+    4: TIER4_FEATURES,    # 53 features — Model D  (FIX 4: was TIER3_FEATURES)
+    5: TIER5_FEATURES,    # 103 features — Model E (FIX 5: was TIER3_FEATURES + text)
 }
-
-# ── Optimisation target ───────────────────────────────────────────────────────
-PRIMARY_METRIC    = 'f1_macro'     # equal weight to both classes
-CLASS_WEIGHT      = 'balanced'     # upweight minority class during training
-DECISION_THRESHOLD = 0.40          # starting point — tuned per model in nb04
 
 # ── Model paths ───────────────────────────────────────────────────────────────
 MODEL_PATHS = {
-    'A': MODELS_DIR / 'model_a.pkl',   # T1 specialist
-    'B': MODELS_DIR / 'model_b.pkl',   # T2 specialist
-    'C': MODELS_DIR / 'model_c.pkl',   # T3 specialist
-    'D': MODELS_DIR / 'model_d.pkl',   # T4 full tabular
-    'E': MODELS_DIR / 'model_e.pkl',   # T5 SBERT fusion
+    'A': MODELS_DIR / 'model_a.pkl',   # T1 specialist — 13 features
+    'B': MODELS_DIR / 'model_b.pkl',   # T2 specialist — 15 features
+    'C': MODELS_DIR / 'model_c.pkl',   # T3 specialist — 47 features
+    'D': MODELS_DIR / 'model_d.pkl',   # T4 full structured — 53 features
+    'E': MODELS_DIR / 'model_e.pkl',   # T5 SBERT fusion — 103 features
 }
 PCA_PATH = MODELS_DIR / 'pca_transformer.pkl'
 
@@ -210,7 +260,7 @@ PCA_PATH = MODELS_DIR / 'pca_transformer.pkl'
 TIER_TO_MODEL = {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E'}
 
 # ── Processed data paths ──────────────────────────────────────────────────────
-FILTERED_CSV        = DATA_PROCESSED / 'games_filtered.csv'
-FEATURES_T4_CSV     = DATA_PROCESSED / 'games_features_t4.csv'
-SBERT_RAW_NPY       = DATA_PROCESSED / 'sbert_embeddings_raw.npy'
-SBERT_PCA_NPY       = DATA_PROCESSED / 'sbert_embeddings_pca50.npy'
+FILTERED_CSV    = DATA_PROCESSED / 'games_filtered.csv'
+FEATURES_T4_CSV = DATA_PROCESSED / 'games_features_t4.csv'
+SBERT_RAW_NPY   = DATA_PROCESSED / 'sbert_embeddings_raw.npy'
+SBERT_PCA_NPY   = DATA_PROCESSED / 'sbert_embeddings_pca50.npy'
