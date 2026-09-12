@@ -189,6 +189,8 @@ TIER1_FEATURES = (
     + ['genre_concentration']
 )
 # len check: 2 + 10 + 1 = 13 ✓
+# Verified via verify_tier_order.py: NB04 imports TIER1_FEATURES directly from
+# this file (does not rebuild it), so this order is confirmed correct.
 
 # T2 — Core + Monetisation (15 features)
 # FIX 3 (comment only): original said "16 features" — correct count is 15.
@@ -198,6 +200,8 @@ TIER2_FEATURES = TIER1_FEATURES + [
     'price_to_dlc_ratio',
 ]
 # len check: 13 + 2 = 15 ✓
+# Verified via verify_tier_order.py: NB04 imports TIER2_FEATURES directly from
+# this file (does not rebuild it), so this order is confirmed correct.
 
 # T3 — Core + Monetisation + Community labels (47 features)
 # FIX 4: Original TIER3_FEATURES incorrectly included the 6 effort signals.
@@ -208,11 +212,16 @@ TIER3_FEATURES = TIER2_FEATURES + (
     + [_col('cat', c) for c in KEY_CATEGORIES]
 )
 # len check: 15 + 20 + 12 = 47 ✓
+# Verified via verify_tier_order.py: NB04 reconstructs T3 locally as
+# TIER2_FEATURES + tag_cols + cat_cols using the same TOP_20_TAGS/KEY_CATEGORIES
+# order as this file, so the resulting order matches — confirmed correct.
 
 # Effort signals — the 6 derived developer-effort features that separate T4 from T3.
 # These test whether observable pre-launch effort (platforms, media count, languages)
 # adds predictive signal on top of community labels alone.
 # T2→T3 was the largest single gain (+0.053 Macro F1). T3→T4 added +0.022.
+# NOTE: kept here for documentation of which 6 features count as "effort signals" —
+# no longer used to construct TIER4_FEATURES below (see FIX 6).
 EFFORT_SIGNALS = [
     'platform_coverage',          # (mac + linux) / 2 — r=+0.107, strongest feature
     'has_achievements',           # binary (achievements > 0) — r=+0.095
@@ -223,15 +232,39 @@ EFFORT_SIGNALS = [
 ]
 
 # T4 — Full structured (53 features)
-# FIX 4 (continued): T4 is T3 + effort signals. Was missing entirely from
-# original config — TIER_FEATURES[4] just aliased TIER3_FEATURES, which
-# made T3 and T4 identical. model_d.pkl was trained on exactly these 53 features.
-TIER4_FEATURES = TIER3_FEATURES + EFFORT_SIGNALS
-# len check: 47 + 6 = 53 ✓
+# FIX 6: TIER4_FEATURES was previously built as TIER3_FEATURES + EFFORT_SIGNALS,
+# which assumed the CSV's column order matched that construction. This was
+# verified FALSE against the actual games_features_t4.csv using
+# verify_tier_order.py — 51 of 53 positions differed. NB04 and NB05 both build
+# T4 from the CSV's natural column order (all columns except reception_label,
+# short_description, and dlc_count), not from a T3 + EFFORT_SIGNALS
+# concatenation. model_d.pkl and model_e.pkl were both trained on exactly the
+# order below. DO NOT rebuild this list from TIER3_FEATURES / EFFORT_SIGNALS —
+# it will silently reintroduce the bug, since CatBoost gives no error for
+# wrong feature order, only wrong predictions.
+TIER4_FEATURES = [
+    'price', 'required_age', 'is_free', 'price_to_dlc_ratio', 'platform_coverage',
+    'has_achievements', 'has_website', 'genre_concentration',
+    'supported_languages_count', 'screenshot_count', 'movie_count',
+    'genre_Indie', 'genre_Adventure', 'genre_Action', 'genre_Casual',
+    'genre_Simulation', 'genre_RPG', 'genre_Strategy', 'genre_Free_To_Play',
+    'genre_Early_Access', 'genre_Massively_Multiplayer',
+    'tag_Singleplayer', 'tag_Indie', 'tag_Adventure', 'tag_Action', 'tag_Casual',
+    'tag_2D', 'tag_Simulation', 'tag_RPG', 'tag_Atmospheric', 'tag_Story_Rich',
+    'tag_Strategy', 'tag_Multiplayer', 'tag_Puzzle', 'tag_Exploration',
+    'tag_First_Person', 'tag_Anime', 'tag_Funny', 'tag_3D', 'tag_Cute', 'tag_Fantasy',
+    'cat_Single_player', 'cat_Multi_player', 'cat_Co_op', 'cat_Steam_Achievements',
+    'cat_Steam_Cloud', 'cat_Full_controller_support', 'cat_Partial_Controller_Support',
+    'cat_Online_Co_op', 'cat_Online_PvP', 'cat_In_App_Purchases', 'cat_Steam_Workshop',
+    'cat_Remote_Play_Together',
+]
+# len check: 53 ✓ (verified against games_features_t4.csv via verify_tier_order.py)
 
 # T5 — Full structured + SBERT PCA50 (103 features)
 # FIX 5: Original built T5 from TIER3_FEATURES instead of TIER4_FEATURES.
 # T5 must be T4 + text dims. model_e.pkl was trained on exactly these 103 features.
+# This now self-corrects once TIER4_FEATURES (above) is fixed — no separate
+# fix needed here. Verified MATCH via verify_tier_order.py after FIX 6.
 TIER5_TEXT_DIMS = [f'text_dim_{i}' for i in range(PCA_COMPONENTS)]
 TIER5_FEATURES  = TIER4_FEATURES + TIER5_TEXT_DIMS
 # len check: 53 + 50 = 103 ✓
@@ -242,8 +275,8 @@ TIER_FEATURES = {
     1: TIER1_FEATURES,    # 13 features — Model A
     2: TIER2_FEATURES,    # 15 features — Model B
     3: TIER3_FEATURES,    # 47 features — Model C
-    4: TIER4_FEATURES,    # 53 features — Model D  (FIX 4: was TIER3_FEATURES)
-    5: TIER5_FEATURES,    # 103 features — Model E (FIX 5: was TIER3_FEATURES + text)
+    4: TIER4_FEATURES,    # 53 features — Model D  (FIX 6: hardcoded to verified CSV order)
+    5: TIER5_FEATURES,    # 103 features — Model E (self-corrects from FIX 6)
 }
 
 # ── Model paths ───────────────────────────────────────────────────────────────

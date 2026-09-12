@@ -9,20 +9,22 @@ import numpy as np
 import joblib
 from pathlib import Path
 
-# ── Default model paths (can be overridden at import time) ───────────────────
-_ROOT       = Path(__file__).resolve().parent.parent.parent
-_MODELS_DIR = _ROOT / 'models'
+from src.config import (
+    MODEL_PATHS, PCA_PATH, TIER_TO_MODEL, UNCERTAINTY_THRESHOLD,
+)
 
-MODEL_PATHS = {
-    'A': _MODELS_DIR / 'model_a.pkl',
-    'B': _MODELS_DIR / 'model_b.pkl',
-    'C': _MODELS_DIR / 'model_c.pkl',
-    'D': _MODELS_DIR / 'model_d.pkl',
-    'E': _MODELS_DIR / 'model_e.pkl',
-}
-PCA_PATH = _MODELS_DIR / 'pca_transformer.pkl'
-
-TIER_TO_MODEL = {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E'}
+# REVISION NOTE (fix applied): MODEL_PATHS, PCA_PATH, and TIER_TO_MODEL were
+# previously redefined locally in this file (duplicating config.py). They now
+# import from config.py directly, so there is one source of truth for paths.
+#
+# REVISION NOTE (fix applied): route_uncertainty() and predict() previously
+# defaulted to threshold=0.55 / uncertainty_threshold=0.55, hardcoded, with no
+# import from config.py at all. 0.55 was one of eight candidate thresholds
+# tested in NB04's CV search (Macro F1 = 0.6561), but NOT the winner — 0.63
+# was selected (Macro F1 = 0.6579) and is what config.py's UNCERTAINTY_THRESHOLD
+# holds. Any caller of predict() that did not explicitly override this
+# parameter would have silently used the untuned 0.55 value on every live
+# prediction. Both defaults now come from config.UNCERTAINTY_THRESHOLD.
 
 
 def load_models(model_paths=None):
@@ -33,6 +35,7 @@ def load_models(model_paths=None):
     ----------
     model_paths : dict, optional
         Override default paths. Keys: 'A', 'B', 'C', 'D', 'E'.
+        Defaults to config.MODEL_PATHS.
 
     Returns
     -------
@@ -69,6 +72,11 @@ def route_direct(features_by_tier, available_tier, models):
     """
     Direct routing: always use the specialist model for the available tier.
     This is the primary routing strategy — confirmed best in ablation study.
+
+    IMPORTANT: features_by_tier[tier] must already be in the exact column
+    order the corresponding model was trained on. Build these arrays using
+    src.features.raw_features.get_tier_feature_lists() to select and order
+    columns — do not assume a DataFrame's natural column order is correct.
 
     Parameters
     ----------
@@ -107,6 +115,8 @@ def route_confidence(features_by_tier, available_tier, models):
     Note: ablation study showed this underperforms direct routing at T3 and T4
     because lower-tier models can express high confidence on wrong predictions.
     Kept for research completeness.
+
+    IMPORTANT: same feature-ordering requirement as route_direct() — see above.
 
     Parameters
     ----------
@@ -151,7 +161,7 @@ def route_uncertainty(
     models,
     pca,
     sbert_model,
-    threshold=0.55
+    threshold=UNCERTAINTY_THRESHOLD
 ):
     """
     Uncertainty-based routing: use Model D directly when confident,
@@ -161,6 +171,14 @@ def route_uncertainty(
     text is encoded with SBERT, PCA-reduced, and combined with T4 features
     to form a T5 input for Model E. The two probability vectors are averaged.
 
+    Games with no description always fall back to Model D directly,
+    regardless of confidence — matches config.DESC_FALLBACK_MODEL.
+
+    IMPORTANT: t4_features must already be in the exact column order
+    config.TIER4_FEATURES specifies. Build it via
+    src.features.raw_features.get_tier_feature_lists() rather than taking a
+    DataFrame's natural column order.
+
     Parameters
     ----------
     t4_features      : 1-D numpy array of T4 structured features (53 dims)
@@ -168,13 +186,17 @@ def route_uncertainty(
     models           : dict {letter: fitted_model}
     pca              : fitted sklearn PCA transformer
     sbert_model      : loaded SentenceTransformer model
-    threshold        : float confidence cutoff for invoking Model E (default 0.55)
+    threshold        : float confidence cutoff for invoking Model E.
+                       Defaults to config.UNCERTAINTY_THRESHOLD (0.63),
+                       the CV-tuned value from NB04 — do not lower this to
+                       0.55 (an untuned candidate value) without a reason.
 
     Returns
     -------
     prediction    : int
     confidence    : float
-    model_used    : str  ('Model D (confident)' or 'Model E (uncertainty resolver)')
+    model_used    : str  ('Model D (confident)', 'Model D (no description)',
+                          or 'Model E (uncertainty resolver)')
     probabilities : 1-D array [p_not_well_received, p_well_received]
     """
     model_d = models['D']
@@ -219,11 +241,20 @@ def evaluate_routing_strategy(
     **kwargs
 ):
     """
-    Evaluate any routing strategy function on the full test set.
+    Evaluate a routing strategy function on the full test set.
+
+    COMPATIBILITY NOTE: this helper's calling convention
+    strategy_fn(game_features, available_tier, models, **kwargs) matches
+    route_direct() and route_confidence() only. route_uncertainty() has a
+    different signature (t4_features, description_text, models, pca,
+    sbert_model, threshold) and CANNOT be passed to this function directly —
+    it needs a per-game description string and SBERT/PCA objects that this
+    helper does not provide. Evaluate route_uncertainty() with a dedicated
+    loop instead (see NB04 Cell 21 for the reference pattern).
 
     Parameters
     ----------
-    strategy_fn      : callable  (route_direct, route_confidence, etc.)
+    strategy_fn      : callable  (route_direct or route_confidence only)
     X_test_by_tier   : dict {tier: 2-D numpy array of test features}
     y_test           : 1-D array of true labels
     models           : dict {letter: fitted_model}
@@ -278,7 +309,7 @@ def predict(
     models=None,
     pca=None,
     sbert_model=None,
-    uncertainty_threshold=0.55,
+    uncertainty_threshold=UNCERTAINTY_THRESHOLD,
     strategy='uncertainty'
 ):
     """
@@ -287,12 +318,18 @@ def predict(
     Parameters
     ----------
     structured_features_by_tier : dict {tier_int: 1-D numpy array}
+        Build via src.features.raw_features.get_tier_feature_lists() to
+        guarantee correct column order — do not pass a DataFrame's natural
+        column order directly.
     description_text             : str or None
     available_tier               : int (1–4)
     models                       : dict {letter: fitted_model}  (load if None)
     pca                          : fitted PCA transformer        (load if None)
     sbert_model                  : SentenceTransformer           (pass if available)
-    uncertainty_threshold        : float (default 0.55)
+    uncertainty_threshold        : float. Defaults to config.UNCERTAINTY_THRESHOLD
+                                   (0.63) — the CV-tuned value. Do not override
+                                   with 0.55 (an untested/untuned candidate)
+                                   unless deliberately re-evaluating threshold choice.
     strategy                     : 'direct' | 'confidence' | 'uncertainty'
 
     Returns
