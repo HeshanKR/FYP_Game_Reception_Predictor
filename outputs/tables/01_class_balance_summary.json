@@ -1,0 +1,15 @@
+{
+  "raw_rows": 89618,
+  "raw_columns": 47,
+  "rows_after_sentinel_removal_and_100_review_filter": 20383,
+  "well_received_count": 14631,
+  "well_received_pct": 71.78,
+  "not_well_received_count": 5752,
+  "not_well_received_pct": 28.22,
+  "free_to_play_count": 4268,
+  "free_to_play_pct": 20.94,
+  "reception_threshold": 0.75,
+  "min_review_count_filter": 100,
+  "dlc_count_standalone_feature": false,
+  "dlc_count_note": "Not significant on its own (see 01_feature_label_correlations.csv). Kept only as an input to the derived price_to_dlc_ratio feature, not as a standalone model feature. If a later ablation notebook finds that adding it back as a raw feature improves Macro F1, treat that as a signal worth re-validating with cross-validation, not single-split noise, given this r=0.005 result."
+}

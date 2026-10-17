@@ -1,0 +1,36 @@
+{
+  "top_10_genres": [
+    "Indie",
+    "Adventure",
+    "Action",
+    "Casual",
+    "Simulation",
+    "RPG",
+    "Strategy",
+    "Free To Play",
+    "Early Access",
+    "Massively Multiplayer"
+  ],
+  "top_20_tags": [
+    "Singleplayer",
+    "Indie",
+    "Adventure",
+    "Action",
+    "Casual",
+    "2D",
+    "Simulation",
+    "RPG",
+    "Atmospheric",
+    "Story Rich",
+    "Strategy",
+    "Multiplayer",
+    "Puzzle",
+    "Exploration",
+    "First-Person",
+    "Anime",
+    "Funny",
+    "3D",
+    "Cute",
+    "Fantasy"
+  ]
+}

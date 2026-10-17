@@ -1,0 +1,49 @@
+column,decision,reason
+pct_pos_total,LABEL SOURCE,Converted to binary reception_label (≥75%=1). Never a feature.
+num_reviews_total,FILTER ONLY,Used to filter ≥100 reviews only. Post-launch — never a feature.
+price,KEEP — T1,Pre-launch. Core monetisation signal. Known at store page creation.
+required_age,KEEP — T1,Pre-launch. Age rating set by developer at submission.
+genres,KEEP — T1,Pre-launch. Top 10 genres → one-hot. Also feeds genre_concentration.
+dlc_count,KEEP — T2 (derived only),"Not used raw (r=0.005, insignificant). Only feeds price_to_dlc_ratio."
+is_free,KEEP — T2 (derived),Derived from price==0. Free games have lower reception rate (65.5% vs 73.4%).
+tags,KEEP — T3,Borderline pre-launch. Top 20 tags → one-hot. Documented as limitation.
+categories,KEEP — T3,"Pre-launch. Developer-declared features → one-hot (multiplayer, controller etc.)."
+windows,DROP,Zero variance — 100% of games support Windows. Teaches model nothing.
+mac,KEEP — T3 (derived),Feeds platform_coverage=(mac+linux)/2. r=0.097 — strongest positive signal.
+linux,KEEP — T3 (derived),Feeds platform_coverage=(mac+linux)/2. r=0.094 — second strongest signal.
+supported_languages,KEEP — T3 (derived),Parsed to supported_languages_count integer. r=0.015 (weak but significant).
+achievements,KEEP — T3 (derived),Binary: has_achievements=(achievements>0). 0 achiev=64.7% vs >0=74.4% well-received.
+full_audio_languages,DROP,"r=0.0076, p=0.277 — not statistically significant. No usable signal."
+screenshots,KEEP — T3 (derived),Parsed to screenshot_count. Marketing effort signal. Pre-launch.
+movies,KEEP — T3 (derived),Parsed to movie_count. Trailer production = investment signal. Pre-launch.
+website,KEEP — T3 (derived),Derived to has_website binary. Studio professionalism proxy.
+short_description,KEEP — T5,Developer-written pre-launch text. SBERT encoding source for Model E.
+appid,DROP,Unique identifier. No predictive value.
+name,DROP,Game title. Not a structured feature.
+release_date,DROP,Post-concept metadata. Not used in any tier.
+developers,DROP,Too high cardinality. Model cannot generalise to unseen studios.
+publishers,DROP,Same cardinality problem as developers.
+detailed_description,DROP,"Redundant with short_description — same content, much longer."
+about_the_game,DROP,Redundant with short_description.
+reviews,DROP,"Press quotes — 88% missing, post-publication."
+header_image,DROP,Store image URL — not a structured feature.
+support_url,DROP,Support link — no predictive signal.
+support_email,DROP,Support contact — no predictive signal.
+notes,DROP,"Content warnings — 81% missing, too sparse."
+packages,DROP,"Complex nested purchase structure — too noisy, no clear signal."
+positive,DROP,Raw count of positive reviews — post-launch. pct_pos_total used instead.
+negative,DROP,Raw count of negative reviews — post-launch.
+metacritic_score,DROP,Post-launch review score — direct leakage.
+metacritic_url,DROP,Post-launch URL — not a feature.
+recommendations,DROP,Post-launch Steam recommendation count.
+user_score,DROP,Virtually all values are 0 — no usable variance.
+score_rank,DROP,99.96% null — also post-launch.
+pct_pos_recent,DROP,Recent review percentage — post-launch.
+num_reviews_recent,DROP,Recent review count — post-launch.
+estimated_owners,DROP,"Ownership range — post-launch, stored as string range."
+average_playtime_forever,DROP,Post-launch playtime data.
+average_playtime_2weeks,DROP,Post-launch playtime data.
+median_playtime_forever,DROP,Post-launch playtime data.
+median_playtime_2weeks,DROP,Post-launch playtime data.
+peak_ccu,DROP,Peak concurrent users — post-launch.
+discount,DROP,"Current store discount — volatile, post-launch pricing."
