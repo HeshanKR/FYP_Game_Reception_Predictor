@@ -39,3 +39,7 @@ notebooks/*.csv
 notebooks/*.parquet
 notebooks/*.json
 notebooks/old_notebooks/
+
+# Large datasets
+notebooks/google-play-dataset-by-tapivedotcom.csv.zip
+notebooks/google-play-dataset-by-tapivedotcom.csv/
