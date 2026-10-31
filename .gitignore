@@ -35,3 +35,7 @@ fenv/
 # md files and py files in notebooks folder
 notebooks/*.md
 notebooks/*.py
+notebooks/*.csv
+notebooks/*.parquet
+notebooks/*.json
+notebooks/old_notebooks/
